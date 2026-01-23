@@ -30,6 +30,7 @@
 #include <iostream>
 #include <iterator>
 #include <map>
+#include <unordered_map>
 #include <sstream>
 #include <string>
 #include <vector>
@@ -142,6 +143,7 @@
 #include "lardataobj/RawData/ExternalTrigger.h"
 #include "lardataobj/RawData/TriggerData.h"
 #include "lardataobj/Simulation/AuxDetSimChannel.h"
+#include "lardataobj/Simulation/SimEnergyDeposit.h"
 
 // // CAFMaker
 #include "sbncode/CAFMaker/AssociationUtil.h"
@@ -1464,6 +1466,19 @@ void CAFMaker::produce(art::Event& evt) noexcept {
   art::Handle<std::vector<simb::MCParticle>> mc_particles;
   GetByLabelStrict(evt, fParams.G4Label(), mc_particles);
 
+  // get all SimEnergyDeposit
+  art::Handle<std::vector<sim::SimEnergyDeposit>> seds;
+  GetByLabelIfExists(evt, fParams.SEDLabel().encode(), seds);
+
+  // map between trackID and SEDs
+  caf::SedMap sedByTrackID;
+  if (seds.isValid()) {
+    sedByTrackID.reserve(seds->size());
+    for (auto const& sed : *seds) {
+      sedByTrackID[sed.TrackID()].push_back(&sed);
+    }
+  }
+
   // collect services
   // Moved ParticleInventory and BackTracker services definition as needed elsewhere (BH)
   auto const clock_data = art::ServiceHandle<detinfo::DetectorClocksService const>()->DataFor(evt);
@@ -2533,7 +2548,7 @@ void CAFMaker::produce(art::Event& evt) noexcept {
             FillTrackTruth(fmTrackHit.at(iPart), id_to_hit_energy_map, true_particles, clock_data, trk);
             // Hit truth information corresponding to Calo-Points
             // Assumes truth matching and calo-points are filled
-            if (mc_particles.isValid() && fParams.FillTrackCaloTruth()) FillTrackCaloTruth(id_to_ide_map, *mc_particles, *geom, wireReadout, clock_data, sce, trk);
+            if (mc_particles.isValid() && fParams.FillTrackCaloTruth()) FillTrackCaloTruth(id_to_ide_map, *mc_particles, *geom, wireReadout, clock_data, sce, sedByTrackID, trk);
           }
         }
       } // thisTrack exists

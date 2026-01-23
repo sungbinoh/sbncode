@@ -142,6 +142,7 @@ namespace caf {
                           const geo::WireReadoutGeom& wireReadout,
                           const detinfo::DetectorClocksData &clockData,
                           const spacecharge::SpaceCharge *sce,
+			  const SedMap & sedByTrackID,
                           caf::SRTrack& srtrack) {
 
     art::ServiceHandle<cheat::BackTrackerService> bt_serv;
@@ -202,7 +203,37 @@ namespace caf {
           truep.h_nelec += ide.numElectrons;
         }
 
-        // Particle based truth matching
+	if(!sedByTrackID.empty() && iplane == 2){
+	  // -- since SED is not empty, let play with it to fill h_e_sed and h_nelec_sed for the collection plane
+
+	  // -- collect unique TrackIDE.trackID values
+	  std::unordered_set<int> uniqueTrackIDs;
+	  uniqueTrackIDs.reserve(h_ides.size());
+	  for (auto const& ide : h_ides) {
+	    uniqueTrackIDs.insert(ide.trackID);
+	  }
+
+	  // -- iterate on the unique TrackIDE.trackID to collect SimEnergyDeposits from those G4 tracks
+	  for (int trackID : uniqueTrackIDs) {
+
+	    auto it = sedByTrackID.find(trackID);
+	    if (it == sedByTrackID.end()) {
+	      // this trackID has no associated SEDs
+	      continue;
+	    }
+
+	    const std::vector<caf::SEDPtr>& seds = it->second;
+	    for (auto const* sed : seds) {
+	      std::cout << "SED:"
+			<< " TrackID=" << sed->TrackID()
+			<< " Energy="  << sed->Energy()
+			<< std::endl;
+	    }
+	  }
+	}
+
+
+	// Particle based truth matching
 
         if (!chan_2_ides.count(p.channel)) { 
           p.truth = truep;

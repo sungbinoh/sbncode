@@ -131,6 +131,12 @@ namespace caf
       "largeant"
     };
 
+    Atom<art::InputTag> SEDLabel {
+      Name("SEDLabel"),
+      Comment("Label of SimEnergyDeposit"),
+      art::InputTag{"ionandscint", "priorSCE"},
+    };
+
     Atom<string> GenLabel {
       Name("GenLabel"),
       Comment("Label of neutrino gen module."),

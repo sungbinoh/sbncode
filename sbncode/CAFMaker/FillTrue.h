@@ -1,6 +1,8 @@
 #ifndef CAF_FILLTRUE_H
 #define CAF_FILLTRUE_H
 
+#include <unordered_map>
+
 #include "TRandom.h"
 #include "TDatabasePDG.h"
 #include "CLHEP/Random/RandEngine.h" // CLHEP::HepRandomEngine
@@ -22,6 +24,7 @@
 #include "sbnobj/Common/SBNEventWeight/EventWeightParameterSet.h"
 #include "lardataobj/MCBase/MCTrack.h"
 #include "lardataobj/Simulation/SimChannel.h"
+#include "lardataobj/Simulation/SimEnergyDeposit.h"
 
 #include "sbnobj/Common/EventGen/MeVPrtl/MeVPrtlTruth.h"
 
@@ -46,6 +49,9 @@ namespace caf
         const TVector3 p1);
 
   caf::g4_process_ GetG4ProcessID(const std::string &name);
+
+  using SEDPtr = sim::SimEnergyDeposit const*;
+  using SedMap = std::unordered_map<int, std::vector<SEDPtr>>;
 
   void FillSRGlobal(const sbn::evwgh::EventWeightParameterSet& pset,
                     caf::SRGlobal& srglobal,
@@ -109,8 +115,8 @@ namespace caf
                           const geo::WireReadoutGeom& wireReadout,
                           const detinfo::DetectorClocksData &clockData,
                           const spacecharge::SpaceCharge *sce,
+			  const SedMap & sedByTrackID,
                           caf::SRTrack& srtrack);
-
 
   void FillStubTruth(const std::vector<art::Ptr<recob::Hit>> &hits,
                      const std::map<int, caf::HitsEnergy> &id_hits_map,
