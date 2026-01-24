@@ -10,6 +10,9 @@
 // LArSoft includes
 #include "larcorealg/Geometry/BoxBoundedGeo.h"
 #include "larcorealg/Geometry/fwd.h"
+#include "larcore/Geometry/Geometry.h"
+#include "larcorealg/Geometry/WireReadoutGeom.h"
+#include "larcorealg/Geometry/GeometryCore.h"
 #include "larsim/MCCheater/BackTrackerService.h"
 #include "larsim/MCCheater/ParticleInventoryService.h"
 #include "larsim/Utils/TruthMatchUtils.h"

@@ -26,6 +26,8 @@ caf::SRTruthMatch MatchSlice2Truth(const std::vector<art::Ptr<recob::Hit>> &hits
 float ContainedLength(const TVector3 &v0, const TVector3 &v1,
                       const std::vector<geoalgo::AABox> &boxes);
 
+double fractionalOverlap(double x11, double x12, double x21, double x22);
+
 bool FRFillNumuCC(const simb::MCTruth &mctruth,
                   const std::vector<art::Ptr<sim::MCTrack>> &mctracks,
                   const std::vector<geo::BoxBoundedGeo> &volumes,
@@ -203,35 +205,70 @@ namespace caf {
           truep.h_nelec += ide.numElectrons;
         }
 
+	truep.h_e_sed = 0.;
+	truep.h_nelec_sed = 0.;
 	if(!sedByTrackID.empty() && iplane == 2){
 	  // -- since SED is not empty, let play with it to fill h_e_sed and h_nelec_sed for the collection plane
-
-	  // -- collect unique TrackIDE.trackID values
-	  std::unordered_set<int> uniqueTrackIDs;
-	  uniqueTrackIDs.reserve(h_ides.size());
-	  for (auto const& ide : h_ides) {
-	    uniqueTrackIDs.insert(ide.trackID);
+	  geo::PlaneID planeid(srtrack.producer, p.tpc, iplane);
+          geo::PlaneGeo const& plane = wireReadout.Plane(planeid);
+	  double pitch = plane.WirePitch();
+	  auto const& wireid = wireReadout.ChannelToWire((unsigned int)p.channel);
+	  int corr = 1;
+	  if (sce && sce->EnableSimSpatialSCE()) {
+	    corr = geometry.TPC(plane.ID()).DriftDir().X();
 	  }
-
-	  // -- iterate on the unique TrackIDE.trackID to collect SimEnergyDeposits from those G4 tracks
-	  for (int trackID : uniqueTrackIDs) {
-
-	    auto it = sedByTrackID.find(trackID);
-	    if (it == sedByTrackID.end()) {
-	      // this trackID has no associated SEDs
-	      continue;
+	  if(!wireid.empty()){
+	    geo::WireGeo const& wire = wireReadout.Wire(wireid.at(0));
+	    auto const & wire_center = wire.GetCenter();
+	    double wire_z1 = wire_center.Z() - pitch/2.;
+	    double wire_z2 = wire_center.Z() + pitch/2.;
+	    //std::cout << "p.z: " << p.z << ", wire_z1: " << wire_z1 << ", wire_z2: " << wire_z2 << std::endl;
+	    // -- collect unique TrackIDE.trackID values
+	    std::unordered_set<int> uniqueTrackIDs;
+	    uniqueTrackIDs.reserve(h_ides.size());
+	    for (auto const& ide : h_ides) {
+	      uniqueTrackIDs.insert(ide.trackID);
 	    }
 
-	    const std::vector<caf::SEDPtr>& seds = it->second;
-	    for (auto const* sed : seds) {
-	      std::cout << "SED:"
-			<< " TrackID=" << sed->TrackID()
-			<< " Energy="  << sed->Energy()
-			<< std::endl;
+	    // -- iterate on the unique TrackIDE.trackID to collect SimEnergyDeposits from those G4 tracks
+	    for (int trackID : uniqueTrackIDs) {
+
+	      auto it = sedByTrackID.find(trackID);
+	      if (it == sedByTrackID.end()) {
+		// this trackID has no associated SEDs
+		continue;
+	      }
+
+	      const std::vector<caf::SEDPtr>& seds = it->second;
+	      for (auto const* sed : seds) {
+		auto sed_Start = sed->Start();
+		auto sed_End = sed->End();
+		if (sce && sce->EnableSimSpatialSCE()) {
+		  geo::Vector_t sce_offset_Start = sce->GetPosOffsets(sed_Start);
+		  geo::Vector_t sce_offset_End = sce->GetPosOffsets(sed_End);
+		  sce_offset_Start.SetX(sce_offset_Start.X()*corr);
+		  sce_offset_End.SetX(sce_offset_End.X()*corr);
+		  sed_Start = sed_Start + sce_offset_Start;
+		  sed_End = sed_End + sce_offset_End;
+		}
+		float sed_StartZ = sed_Start.Z();
+                float sed_EndZ = sed_End.Z();
+		float this_frac_ovl = fractionalOverlap(wire_z1, wire_z2, sed_StartZ, sed_EndZ);
+		if(this_frac_ovl > 1e-6){// -- consider only sed with overlap
+		  float this_Energy_frac = this_frac_ovl * sed->Energy();
+		  float this_NumElectrons_frac = this_frac_ovl * sed->NumElectrons();
+		  truep.h_e_sed += this_Energy_frac;
+		  truep.h_nelec_sed += this_NumElectrons_frac;
+		  /*
+		  std::cout << Form("trackID = %d, pdg = %d, (p.x, p.y, p.z, p.t) = (%f, %f, %f, %f), sed start (x,y,z,t) = (%f, %f, %f), sed end (x,y,z,t) = (%f, %f, %f)",
+				    trackID, sed->PdgCode(), p.x, p.y, p.z, p.t, sed_Start.X(), sed_Start.Y(), sed_Start.Z(), sed_End.X(), sed_End.Y(), sed_End.Z()) << std::endl;
+		  */
+		}
+	      }
 	    }
 	  }
 	}
-
+	//if(iplane == 2) std::cout << "truep.h_nelec: " << truep.h_nelec << ", truep.h_e: " << truep.h_e << ", truep.h_e_sed: " << truep.h_e_sed << ", truep.h_nelec_sed: " << truep.h_nelec_sed << std::endl;
 
 	// Particle based truth matching
 
@@ -350,6 +387,7 @@ namespace caf {
         }
         else truep.pitch = -1;
 
+	if(iplane == 2) std::cout << "truep.h_nelec: " << truep.h_nelec << ", truep.h_e: " << truep.h_e << ", truep.h_e_sed: " << truep.h_e_sed << ", truep.h_nelec_sed: " << truep.h_nelec_sed << std::endl;
         p.truth = truep;
 
       }
@@ -1522,6 +1560,21 @@ float ContainedLength(const TVector3 &v0, const TVector3 &v1,
 
   return length;
 }//ContainedLength
+
+//------------------------------------------------
+double fractionalOverlap(double x11, double x12,double x21, double x22){
+  // collect fractional overlap of [x21, x22] in a container [x11, x12]
+
+  // ensure proper ordering
+  if (x11 > x12) std::swap(x11, x12);
+  if (x21 > x22) std::swap(x21, x22);
+
+  const double len = x22 - x21;
+  if (len <= 0.0) return 0.0;  // avoid division by zero
+
+  const double overlap = std::max(0.0, std::min(x12, x22) - std::max(x11, x21));
+  return overlap / len;
+}//fractionalOverlap
 
 //------------------------------------------------
 caf::SRTrackTruth MatchTrack2Truth(const detinfo::DetectorClocksData &clockData, const std::vector<caf::SRTrueParticle> &particles, const std::vector<art::Ptr<recob::Hit>> &hits,
