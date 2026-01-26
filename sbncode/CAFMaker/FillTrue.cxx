@@ -387,7 +387,7 @@ namespace caf {
         }
         else truep.pitch = -1;
 
-	if(iplane == 2) std::cout << "truep.h_nelec: " << truep.h_nelec << ", truep.h_e: " << truep.h_e << ", truep.h_e_sed: " << truep.h_e_sed << ", truep.h_nelec_sed: " << truep.h_nelec_sed << std::endl;
+	//if(iplane == 2) std::cout << "truep.h_nelec: " << truep.h_nelec << ", truep.h_e: " << truep.h_e << ", truep.h_e_sed: " << truep.h_e_sed << ", truep.h_nelec_sed: " << truep.h_nelec_sed << std::endl;
         p.truth = truep;
 
       }
